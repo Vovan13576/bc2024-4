@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs').promises;
 const path = require('path');
+const superagent = require('superagent');
 
 const PORT = 3000;
 const CACHE_DIR = path.join(__dirname, 'cache');
@@ -14,13 +15,23 @@ fs.mkdir(CACHE_DIR, { recursive: true })
 
       if (req.method === 'GET') {
         try {
+          // Перевірка кешу
           const data = await fs.readFile(filePath);
           res.writeHead(200, { 'Content-Type': 'image/jpeg' });
           res.end(data);
         } catch (error) {
           if (error.code === 'ENOENT') {
-            res.writeHead(404, { 'Content-Type': 'text/plain' });
-            res.end('Not Found');
+            // Якщо картинки немає в кеші, запитуємо з http.cat
+            try {
+              const response = await superagent.get(`https://http.cat/${code}`);
+              const imageBuffer = Buffer.from(response.body); // Отримуємо дані картинки
+              await fs.writeFile(filePath, imageBuffer); // Зберігаємо в кеш
+              res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+              res.end(imageBuffer);
+            } catch (error) {
+              res.writeHead(404, { 'Content-Type': 'text/plain' });
+              res.end('Not Found');
+            }
           } else {
             res.writeHead(500, { 'Content-Type': 'text/plain' });
             res.end('Internal Server Error');
@@ -68,3 +79,5 @@ fs.mkdir(CACHE_DIR, { recursive: true })
   .catch(err => {
     console.error('Error creating cache directory:', err);
   });
+
+  
